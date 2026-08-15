@@ -1,0 +1,130 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql" 
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum DocStatus {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+// ------------------------------------------------------
+// ຕາຕະລາງ ຄະນະ (Faculty) ແລະ ພາກວິຊາ (Department)
+// ------------------------------------------------------
+
+model Faculty {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique // ເຊັ່ນ: ຄະນະວິສະວະກຳສາດ, ຄະນະເສດຖະສາດ ແລະ ບໍລິຫານທຸລະກິດ
+  code        String?      @unique // ລະຫັດຄະນະ (ເຊັ່ນ: FE, FEB, FNS, FL)
+  
+  departments Department[]
+  users       User[]
+  documents   Document[]
+}
+
+model Department {
+  id          Int          @id @default(autoincrement())
+  name        String       // ເຊັ່ນ: ພາກວິຊາວິສະວະກຳຄອມພິວເຕີ ແລະ ເຕັກໂນໂລຊີຂໍ້ມູນຂ່າວສານ
+  
+  facultyId   Int
+  faculty     Faculty      @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  
+  users       User[]
+  documents   Document[]
+
+  @@unique([name, facultyId]) 
+  @@index([facultyId])
+}
+
+// ------------------------------------------------------
+// ຕາຕະລາງ User ແລະ Document
+// ------------------------------------------------------
+
+model User {
+  id           String         @id @default(uuid())
+  userCode     String         @unique 
+  password     String
+  email        String?        @unique 
+  firstName    String
+  lastName     String
+  role         Role           @default(STUDENT)
+  
+  facultyId    Int?
+  faculty      Faculty?       @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+  
+  departmentId Int?
+  department   Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  activities   UserActivity[]
+
+  @@index([userCode])
+  @@index([role])
+  @@index([facultyId])
+}
+
+model Document {
+  id             String         @id @default(uuid())
+  title          String         @db.VarChar(255)
+  abstract       String?        @db.Text
+  author         String         @db.VarChar(150)
+  publishedYear  Int?      
+  status         DocStatus      @default(AVAILABLE)
+  fileUrl        String    
+  coverUrl       String?
+  tags           String[]       @default([])
+  
+  categoryId     Int
+  category       Category       @relation(fields: [categoryId], references: [id])
+  
+  facultyId      Int
+  faculty        Faculty        @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  
+  departmentId   Int?
+  department     Department?    @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  userActivities UserActivity[]
+
+  @@index([title])
+  @@index([facultyId, status]) 
+  @@index([departmentId])
+  @@index([categoryId])
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  documents   Document[]
+}
+
+model UserActivity {
+  id          String   @id @default(uuid())
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  documentId  String
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  actionType  String   // "VIEW", "DOWNLOAD"
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([documentId])
+  @@index([createdAt])
+}
