@@ -4,10 +4,7 @@ export class CreateDepartmentDto {
   @IsNotEmpty({ message: 'Department name is required' })
   @IsString()
   name: string;
-
-  @IsNotEmpty({ message: 'Faculty ID is required' })
-  @IsInt()
-  facultyId: number;
+  // facultyId comes from the route (POST /faculties/:id/departments), not the body
 }
 
 export class UpdateDepartmentDto {

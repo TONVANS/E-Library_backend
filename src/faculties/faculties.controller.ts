@@ -52,8 +52,7 @@ export class FacultiesController {
     @Param('id', ParseIntPipe) facultyId: number,
     @Body() dto: CreateDepartmentDto,
   ) {
-    dto.facultyId = facultyId;
-    return this.facultiesService.createDepartment(dto);
+    return this.facultiesService.createDepartment(facultyId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

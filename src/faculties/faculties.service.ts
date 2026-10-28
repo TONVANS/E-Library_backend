@@ -88,14 +88,14 @@ export class FacultiesService {
   // Department Actions
   // ----------------------------------------------------
 
-  async createDepartment(dto: CreateDepartmentDto) {
-    await this.findOneFaculty(Number(dto.facultyId));
+  async createDepartment(facultyId: number, dto: CreateDepartmentDto) {
+    await this.findOneFaculty(facultyId);
 
     const existing = await this.prisma.department.findUnique({
       where: {
         name_facultyId: {
           name: dto.name.trim(),
-          facultyId: Number(dto.facultyId),
+          facultyId,
         },
       },
     });
@@ -107,7 +107,7 @@ export class FacultiesService {
     return this.prisma.department.create({
       data: {
         name: dto.name.trim(),
-        facultyId: Number(dto.facultyId),
+        facultyId,
       },
     });
   }
