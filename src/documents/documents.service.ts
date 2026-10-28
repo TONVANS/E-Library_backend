@@ -22,29 +22,38 @@ export class DocumentsService {
     return [];
   }
 
-  async findAll(query: QueryDocumentDto, currentUser?: any) {
-    const page = Math.max(Number(query.page) || 1, 1);
-    const limit = Math.max(Number(query.limit) || 12, 1);
-    const skip = (page - 1) * limit;
-
+  // 🔴 RBAC & Faculty Isolation Logic:
+  // - Admin: may filter by any status and faculty.
+  // - Teacher/Student with a faculty: only AVAILABLE documents of their own faculty.
+  // - Guest (or user without a faculty): only AVAILABLE documents, any faculty filter allowed.
+  private buildVisibilityWhere(query: QueryDocumentDto, currentUser?: any) {
     const where: any = {};
 
-    // 🔴 RBAC & Faculty Isolation Logic:
-    // If not Admin, user MUST only see AVAILABLE documents from their own faculty.
-    if (!currentUser || currentUser.role !== Role.ADMIN) {
-      where.status = DocStatus.AVAILABLE;
-      if (currentUser?.facultyId) {
-        where.facultyId = currentUser.facultyId;
-      }
-    } else {
-      // Admin can filter by status and faculty freely
+    if (currentUser?.role === Role.ADMIN) {
       if (query.status) {
         where.status = query.status;
       }
       if (query.facultyId) {
         where.facultyId = Number(query.facultyId);
       }
+      return where;
     }
+
+    where.status = DocStatus.AVAILABLE;
+    if (currentUser?.facultyId) {
+      where.facultyId = currentUser.facultyId;
+    } else if (query.facultyId) {
+      where.facultyId = Number(query.facultyId);
+    }
+    return where;
+  }
+
+  async findAll(query: QueryDocumentDto, currentUser?: any) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 12, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const where: any = this.buildVisibilityWhere(query, currentUser);
 
     if (query.categoryId) {
       where.categoryId = Number(query.categoryId);
@@ -62,19 +71,20 @@ export class DocumentsService {
       where.tags = { has: query.tag.trim() };
     }
 
-    if (query.search) {
-      const s = query.search.trim();
+    const search = query.search?.trim();
+    if (search) {
       where.OR = [
-        { title: { contains: s, mode: 'insensitive' } },
-        { author: { contains: s, mode: 'insensitive' } },
-        { abstract: { contains: s, mode: 'insensitive' } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { author: { contains: search, mode: 'insensitive' } },
+        { abstract: { contains: search, mode: 'insensitive' } },
+        { tags: { has: search } },
       ];
     }
 
-    const orderBy: any = {};
     const sortField = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder === 'asc' ? 'asc' : 'desc';
-    orderBy[sortField] = sortOrder;
+    // Secondary sort on id keeps page boundaries stable when the primary field ties
+    const orderBy: any[] = [{ [sortField]: sortOrder }, { id: 'asc' }];
 
     const [total, documents] = await Promise.all([
       this.prisma.document.count({ where }),
@@ -103,6 +113,18 @@ export class DocumentsService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  // Distinct published years the current user can see, newest first (for the year filter)
+  async findYears(query: QueryDocumentDto, currentUser?: any) {
+    const where = this.buildVisibilityWhere(query, currentUser);
+    const rows = await this.prisma.document.findMany({
+      where: { ...where, publishedYear: { not: null } },
+      distinct: ['publishedYear'],
+      select: { publishedYear: true },
+      orderBy: { publishedYear: 'desc' },
+    });
+    return rows.map((r) => r.publishedYear as number);
   }
 
   // Backoffice listing for Admin / Teacher

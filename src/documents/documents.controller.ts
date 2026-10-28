@@ -23,6 +23,7 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentDto, UpdateDocumentDto, UpdateDocumentStatusDto } from './dto/create-document.dto';
 import { QueryDocumentDto } from './dto/query-document.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -49,11 +50,18 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   // Public/Student/Teacher catalog query
+  // OptionalJwtAuthGuard populates req.user when a token is sent, so faculty isolation applies
+  @UseGuards(OptionalJwtAuthGuard)
   @Get()
   async findAll(@Query() query: QueryDocumentDto, @Req() req: any) {
-    // Optional auth check (e.g. from token if present in headers)
-    const currentUser = req.user;
-    return this.documentsService.findAll(query, currentUser);
+    return this.documentsService.findAll(query, req.user);
+  }
+
+  // Years available for the catalog year filter (declared before ':id')
+  @UseGuards(OptionalJwtAuthGuard)
+  @Get('years')
+  async findYears(@Query() query: QueryDocumentDto, @Req() req: any) {
+    return this.documentsService.findYears(query, req.user);
   }
 
   // Backoffice document table for Admin and Teachers
